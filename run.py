@@ -58,7 +58,9 @@ def ws_open(ws):
 
 def ws_message(ws, message):
     global config
-    global grid
+
+    global orderDCA
+    global orderTP
 
     # We are realoading configs so that you can update the grid when it is running
     config = json.loads(environ['strategy'])
@@ -74,88 +76,19 @@ def ws_message(ws, message):
     if order['status'] != 'FILLED':
         return
 
-    # Lets find the order that has been filled
-    foundFlag = False
-    for j in grid:
-        if grid[j] is not None:
-            if order['id'] == grid[j]['id']:
-                foundFlag = True
-                break
+    if order['id'] == orderTP['id']:
+        log('Take profit order filled')
+        xchange.private.create_order(orderDCA['id'])
+        orderDCA = None
+        exit()
 
-    if not foundFlag:
-        return
+    if order['id'] == orderDCA['id']:
+        log('DCA order filled')
+        xchange.private.create_order(orderTP['id'])
+        orderTP = None
+        order()
 
-    orderType = grid[j]['side']
-    orderPrice = grid[j]['price']
-    log(F'{orderType} order filled at {orderPrice}')
-
-    if config['main']['above'] == 'buy':
-        aboveOrder = ORDER_SIDE_BUY
-    else:
-        aboveOrder = ORDER_SIDE_SELL
-
-    if config['main']['below'] == 'buy':
-        belowOrder = ORDER_SIDE_BUY
-    else:
-        belowOrder = ORDER_SIDE_SELL
-
-    # found it, let's build around it
-    grid[j] = None
-
-    x = j
-    a = config['orders']['above']
-    numOrders = 0
-    for i in range(j + int(config['bounds']['step'] * J), int(config['bounds']['high'] * J) + int(config['bounds']['step'] * J), int(config['bounds']['step'] * J)):
-        if numOrders < config['orders']['above'] and grid[i] is None:
-            price = str(i / J)
-            log(f'Placing {aboveOrder} order above at {price} - {numOrders+1}/{a}')
-            grid[i] = xchange.private.create_order(
-                position_id=account['positionId'],
-                market=config['main']['market'],
-                side=aboveOrder,
-                order_type=ORDER_TYPE_LIMIT,
-                post_only=True,
-                size=str(config['orders']['size']),
-                price=price,
-                limit_fee='0',
-                expiration_epoch_seconds=9000000000,
-            ).data['order']
-
-        if numOrders >= config['orders']['above'] and grid[i] is not None:
-            orderType = grid[i]['side']
-            orderPrice = grid[i]['price']
-            log(f'Cancelling {orderType} above at {orderPrice}')
-            xchange.private.cancel_order(grid[i]['id'])
-            grid[i] = None
-        numOrders += 1
-
-    j = x
-    a = config['orders']['below']
-    numOrders = 0
-    for i in range(j - int(config['bounds']['step'] * J), int(config['bounds']['low'] * J) - int(config['bounds']['step'] * J), int(-config['bounds']['step'] * J)):
-        if numOrders < config['orders']['below'] and grid[i] is None:
-            price = str(i / J)
-            log(f'Placing {belowOrder} order below at {price} - {numOrders+1}/{a}')
-            grid[i] = xchange.private.create_order(
-                position_id=account['positionId'],
-                market=config['main']['market'],
-                side=belowOrder,
-                order_type=ORDER_TYPE_LIMIT,
-                post_only=True,
-                size=str(config['orders']['size']),
-                price=price,
-                limit_fee='0',
-                expiration_epoch_seconds=9000000000,
-            ).data['order']
-
-        if numOrders >= config['orders']['below'] and grid[i] is not None:
-            orderType = grid[i]['side']
-            orderPrice = grid[i]['price']
-            log(f'Cancelling {orderType} order below at {orderPrice}')
-            xchange.private.cancel_order(grid[i]['id'])
-            grid[i] = None
-        numOrders += 1
-
+ 
 
 def ws_close(ws, p2, p3):
     global grid
@@ -169,6 +102,7 @@ def ws_close(ws, p2, p3):
             log(f'Cancelling {orderType} order at {orderPrice}')
             xchange.private.cancel_order(grid[i]['id'])
             grid[i] = None
+            
 def on_ping(wsapp, message):
     global account        
     global config
@@ -179,14 +113,80 @@ def on_ping(wsapp, message):
     account = xchange.private.get_account().data['account']
     # log("I'm alive!")
 
+def order():
+    global startPrice
+    global DCANo
+    global config
+    global totalSize
+    global totalCash
+    global orderDCA
+    global orderTP
+    global account
+
+    orderSize = config['orders'][DCANo]['size']
+
+    if config['main']['dca'] == 'buy':
+        orderSide = ORDER_SIDE_BUY
+        orderPrice = startPrice * (1 - config['orders'][DCANo]['price'])
+
+    if config['main']['dca'] == 'sell':
+        orderSide = ORDER_SIDE_SELL
+        orderPrice = startPrice * (1 + config['orders'][DCANo]['price'])
+
+    log(f'Placing DCA {orderSide} order {DCANo + 1} at {orderPrice} size {orderSize}')
+    orderDCA = xchange.private.create_order(
+        position_id=account['positionId'],
+        market=config['main']['market'],
+        side=orderSide,
+        order_type=ORDER_TYPE_LIMIT,
+        post_only=True,
+        size=str(orderSize),
+        price=str(orderPrice),
+        limit_fee='0',
+        expiration_epoch_seconds=9000000000,
+    ).data['order']
+
+    totalSize += orderSize
+    totalCash += orderSize * orderPrice
+    averagePrice = totalCash / totalSize
+
+    if config['main']['takeprofit'] == 'buy':
+        orderSide = ORDER_SIDE_BUY
+        orderPrice = averagePrice * (1 - config['orders'][DCANo]['price'])
+
+    if config['main']['takeprofit'] == 'sell':
+        orderSide = ORDER_SIDE_SELL
+        orderPrice = averagePrice * (1 + config['orders'][DCANo]['price'])
+
+    log(f'Placing take profit {totalSize} order at {averagePrice} size {totalSize}')
+    orderTP = xchange.private.create_order(
+        position_id=account['positionId'],
+        market=config['main']['market'],
+        side=orderSide,
+        order_type=ORDER_TYPE_LIMIT,
+        post_only=True,
+        size=str(totalSize),
+        price=str(orderPrice),
+        limit_fee='0',
+        expiration_epoch_seconds=9000000000,
+    ).data['order']
+
+    DCANo+=1
+
 def main():
     global config
     global xchange
     global signature
     global signature_time
-    global grid
+    global account
 
-    grid = {}
+    global startPrice
+    global DCANo
+    global config
+    global totalSize
+    global totalCash
+    global orderDCA
+    global orderTP
 
     startTime = datetime.datetime.now()
 
@@ -219,50 +219,17 @@ def main():
     log('Getting account data')
     account = xchange.private.get_account().data['account']
 
-    log('Building grid')
-    for x in range(
-            int(config['bounds']['low'] * J),
-            int(config['bounds']['high'] * J) +
-        int(config['bounds']['step'] * J),
-            int(config['bounds']['step'] * J)):
-        grid[x] = None
-
     orderBook = xchange.public.get_orderbook(config['main']['market']).data
     ask = float(orderBook['asks'][0]['price'])
     bid = float(orderBook['bids'][0]['price'])
-    price = (ask + bid) / 2
+   
+    startPrice = (ask + bid) / 2
+    orderDCA = None
+    totalSize = 0
+    totalCash = 0
+    DCANo = 0
 
-    log('Placing start order')
-    # location = gridline above current price
-    location = list(grid)[bisect(list(grid), price*J)]
-
-    if config['start']['order'] == 'buy':
-        startOrder = ORDER_SIDE_BUY
-
-    if config['start']['order'] == 'sell':
-        startOrder = ORDER_SIDE_SELL
-
-    startLocation = config['start']['location']
-
-    if  startLocation == 'below':
-        x = location - int(config['bounds']['step'] * J)
-    else:
-        x = location
-
-    price = x / J
-
-    log(f'Placing {startOrder} order {startLocation} at {price}')
-    grid[x] = xchange.private.create_order(
-        position_id=account['positionId'],
-        market=config['main']['market'],
-        side=startOrder,
-        order_type=ORDER_TYPE_LIMIT,
-        post_only=True,
-        size=str(config['start']['size']),
-        price=str(price),
-        limit_fee='0',
-        expiration_epoch_seconds=9000000000,
-    ).data['order']
+    order()
 
     log('Starting bot loop')
     # websocket.enableTrace(True)
