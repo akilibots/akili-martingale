@@ -3,7 +3,8 @@ import json
 import requests
 import urllib
 import websocket
-from os import environ
+
+from decimal import Decimal
 
 from dydx3 import Client
 from dydx3.constants import *
@@ -58,6 +59,16 @@ def ws_message(ws, message):
     global orderDCA
     global orderTP
 
+    global startPrice
+    global DCANo
+
+    global totalSize
+    global totalCash
+
+    global account
+    global tickSize
+    global averagePrice
+
     conf = config()
 
     message = json.loads(message)
@@ -82,7 +93,66 @@ def ws_message(ws, message):
         if orderTP is not None:
             xchange.private.cancel_order(orderTP['id'])
         orderTP = None
-        nextOrder()
+
+        if conf['main']['takeprofit'] == 'buy':
+            orderSide = ORDER_SIDE_BUY
+            orderPrice = averagePrice * (1 - conf['orders'][DCANo]['profit'])
+
+        if conf['main']['takeprofit'] == 'sell':
+            orderSide = ORDER_SIDE_SELL
+            orderPrice = averagePrice * (1 + conf['orders'][DCANo]['profit'])
+
+        XaveragePrice = str(round(averagePrice, abs(Decimal(tickSize).as_tuple().exponent)))
+        log(f'Position size:{totalSize} @ {XaveragePrice}')
+        #XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
+        XorderPrice = str(round(orderPrice, abs(Decimal(tickSize).as_tuple().exponent)))
+
+        log(f'Placing take profit {orderSide} order at {XorderPrice} size {totalSize}')
+        orderTP = xchange.private.create_order(
+            position_id=account['positionId'],
+            market=conf['main']['market'],
+            side=orderSide,
+            order_type=ORDER_TYPE_LIMIT,
+            post_only=True,
+            size=str(totalSize),
+            price=XorderPrice,
+            limit_fee='0',
+            expiration_epoch_seconds=9000000000,
+        ).data['order']
+
+        DCANo+=1
+
+        orderSize = conf['orders'][DCANo]['size']
+
+        if conf['main']['dca'] == 'buy':
+            orderSide = ORDER_SIDE_BUY
+            orderPrice = startPrice * (1 - conf['orders'][DCANo]['price'])
+
+        if conf['main']['dca'] == 'sell':
+            orderSide = ORDER_SIDE_SELL
+            orderPrice = startPrice * (1 + conf['orders'][DCANo]['price'])
+
+        #XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10],
+        XorderPrice = str(round(orderPrice, abs(Decimal(tickSize).as_tuple().exponent)))        
+
+        log(f'Placing DCA {orderSide} order {DCANo + 1} at {XorderPrice} size {orderSize}')
+        orderDCA = xchange.private.create_order(
+            position_id=account['positionId'],
+            market=conf['main']['market'],
+            side=orderSide,
+            order_type=ORDER_TYPE_LIMIT,
+            post_only=True,
+            size=str(orderSize),
+            price=XorderPrice,
+            limit_fee='0',
+            expiration_epoch_seconds=9000000000,
+        ).data['order']
+
+        totalSize += orderSize
+        totalCash += orderSize * orderPrice
+        averagePrice = totalCash / totalSize
+        XaveragePrice = str(round(averagePrice, abs(Decimal(tickSize).as_tuple().exponent)))
+        log(f'Position size:{totalSize} @ {XaveragePrice}')
 
 
 
@@ -98,73 +168,6 @@ def on_ping(wsapp, message):
     account = xchange.private.get_account().data['account']
     # log("I'm alive!")
 
-def nextOrder():
-    global startPrice
-    global DCANo
-    global totalSize
-    global totalCash
-    global orderDCA
-    global orderTP
-    global account
-    global tickSize
-    global averagePrice
-
-    conf = config()
-
-    if conf['main']['takeprofit'] == 'buy':
-        orderSide = ORDER_SIDE_BUY
-        orderPrice = averagePrice * (1 - conf['orders'][DCANo]['profit'])
-
-    if conf['main']['takeprofit'] == 'sell':
-        orderSide = ORDER_SIDE_SELL
-        orderPrice = averagePrice * (1 + conf['orders'][DCANo]['profit'])
-
-    XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
-
-    log(f'Placing take profit {orderSide} order at {XorderPrice} size {totalSize}')
-    orderTP = xchange.private.create_order(
-        position_id=account['positionId'],
-        market=conf['main']['market'],
-        side=orderSide,
-        order_type=ORDER_TYPE_LIMIT,
-        post_only=True,
-        size=str(totalSize),
-        price=XorderPrice,
-        limit_fee='0',
-        expiration_epoch_seconds=9000000000,
-    ).data['order']
-
-    DCANo+=1
-
-    orderSize = conf['orders'][DCANo]['size']
-
-    if conf['main']['dca'] == 'buy':
-        orderSide = ORDER_SIDE_BUY
-        orderPrice = startPrice * (1 - conf['orders'][DCANo]['price'])
-
-    if conf['main']['dca'] == 'sell':
-        orderSide = ORDER_SIDE_SELL
-        orderPrice = startPrice * (1 + conf['orders'][DCANo]['price'])
-
-    XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
-
-    log(f'Placing DCA {orderSide} order {DCANo + 1} at {XorderPrice} size {orderSize}')
-    orderDCA = xchange.private.create_order(
-        position_id=account['positionId'],
-        market=conf['main']['market'],
-        side=orderSide,
-        order_type=ORDER_TYPE_LIMIT,
-        post_only=True,
-        size=str(orderSize),
-        price=XorderPrice,
-        limit_fee='0',
-        expiration_epoch_seconds=9000000000,
-    ).data['order']
-
-    totalSize += orderSize
-    totalCash += orderSize * orderPrice
-    averagePrice = totalCash / totalSize
-
 
 def main():
     global xchange
@@ -174,8 +177,10 @@ def main():
 
     global startPrice
     global DCANo
+
     global totalSize
     global totalCash
+
     global orderDCA
     global orderTP
     global tickSize
@@ -212,19 +217,21 @@ def main():
     log('Getting account data')
     account = xchange.private.get_account().data['account']
     market = xchange.public.get_markets(conf['main']['market']).data['markets'][conf['main']['market']]
-    tickSize = float(market['tickSize'])
+    tickSize = market['tickSize']
 
     orderBook = xchange.public.get_orderbook(conf['main']['market']).data
     ask = float(orderBook['asks'][0]['price'])
     bid = float(orderBook['bids'][0]['price'])
    
     startPrice = (ask + bid) / 2
+    log(f'Starting price is {startPrice}')
 
     orderDCA = None
     totalSize = 0
     totalCash = 0
     DCANo = 0
     orderTP = None
+    averagePrice = 0
 
     orderSize = conf['orders'][DCANo]['size']
 
@@ -236,9 +243,12 @@ def main():
         orderSide = ORDER_SIDE_SELL
         orderPrice = startPrice * (1 + conf['orders'][DCANo]['price'])
 
-    XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
+    # XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
+    XorderPrice = str(round(orderPrice, abs(Decimal(tickSize).as_tuple().exponent)))
+    print(tickSize)
 
-    log(f'Placing DCA {orderSide} order {DCANo + 1} at {XorderPrice} size {orderSize}')
+    # First order
+    log(f'Placing start {orderSide} order {DCANo + 1} at {XorderPrice} size {orderSize}')
     orderDCA = xchange.private.create_order(
         position_id=account['positionId'],
         market=conf['main']['market'],
@@ -254,6 +264,8 @@ def main():
     totalSize += orderSize
     totalCash += orderSize * orderPrice
     averagePrice = totalCash / totalSize
+    XaveragePrice = str(round(averagePrice, abs(Decimal(tickSize).as_tuple().exponent)))
+    log(f'Position size:{totalSize} @ {XaveragePrice}')
 
     log('Starting bot loop')
     # websocket.enableTrace(True)

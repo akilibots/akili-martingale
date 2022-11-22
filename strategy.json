@@ -1,10 +1,10 @@
 {
   "main": {
-    "name": "Jangita📈",
+    "name": "Jangita⛽",
     "takeprofit": "sell",
     "dca": "buy",
     "leverage": "3",
-    "market": "SOL-USD"
+    "market": "ETH-USD"
   },
   "dydx": {
     "APIkey": "put your dydx API key here",
@@ -15,29 +15,24 @@
   },
   "orders": [
     {
-      "size": 0.2,
-      "price": -0.01,
+      "size": 0.01,
+      "price": 0.0001,
       "profit": 0.01
     },
     {
-      "size": 0.4,
-      "price": -0.03,
-      "profit": 0.01
+      "size": 0.03,
+      "price": 0.025,
+      "profit": 0.011
     },
     {
-      "size": 0.7,
-      "price": -0.06,
-      "profit": 0.01
+      "size": 0.07,
+      "price": 0.06,
+      "profit": 0.012
     },
     {
-      "size": 0.11,
-      "price": -0.1,
-      "profit": 0.02
-    },
-    {
-      "size": 0.16,
-      "price": -0.15,
-      "profit": 0.02
+      "size": 0.15,
+      "price": 0.1,
+      "profit": 0.013
     }
   ],
   "telegram": {
