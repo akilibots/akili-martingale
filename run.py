@@ -9,9 +9,10 @@ from dydx3 import Client
 from dydx3.constants import *
 from dydx3.helpers.request_helpers import generate_now_iso
 
+from config import config
+
 
 # Global Vars
-config = None
 xchange = None
 signature = None
 signature_time = None
@@ -19,20 +20,22 @@ account = None
 
 
 def log(msg):
-    msg = config['main']['name'] + ':' + msg
+    conf = config()
+
+    msg = conf['main']['name'] + ':' + msg
     print(datetime.datetime.now().isoformat(), msg)
 
-    if config['telegram']['chatid'] == '' or config['telegram']['bottoken'] == '':
+    if conf['telegram']['chatid'] == '' or conf['telegram']['bottoken'] == '':
         return
 
     params = {
-        'chat_id': config['telegram']['chatid'],
+        'chat_id': conf['telegram']['chatid'],
         'text': msg
     }
     payload_str = urllib.parse.urlencode(params, safe='@')
     requests.get(
         'https://api.telegram.org/bot' +
-        config['telegram']['bottoken'] + '/sendMessage',
+        conf['telegram']['bottoken'] + '/sendMessage',
         params=payload_str
     )
 
@@ -52,13 +55,10 @@ def ws_open(ws):
 
 
 def ws_message(ws, message):
-    global config
-
     global orderDCA
     global orderTP
 
-    # We are realoading configs so that you can update the grid when it is running
-    config = json.loads(environ['strategy'])
+    conf = config()
 
     message = json.loads(message)
     if message['type'] != 'channel_data':
@@ -94,18 +94,13 @@ def ws_close(ws, p2, p3):
             
 def on_ping(wsapp, message):
     global account        
-    global config
-
-    # We are realoading configs so that you can update the grid when it is running
     # To keep connection API active
-    config = json.loads(environ['strategy'])
     account = xchange.private.get_account().data['account']
     # log("I'm alive!")
 
 def nextOrder():
     global startPrice
     global DCANo
-    global config
     global totalSize
     global totalCash
     global orderDCA
@@ -114,21 +109,22 @@ def nextOrder():
     global tickSize
     global averagePrice
 
+    conf = config()
 
-    if config['main']['takeprofit'] == 'buy':
+    if conf['main']['takeprofit'] == 'buy':
         orderSide = ORDER_SIDE_BUY
-        orderPrice = averagePrice * (1 - config['orders'][DCANo]['profit'])
+        orderPrice = averagePrice * (1 - conf['orders'][DCANo]['profit'])
 
-    if config['main']['takeprofit'] == 'sell':
+    if conf['main']['takeprofit'] == 'sell':
         orderSide = ORDER_SIDE_SELL
-        orderPrice = averagePrice * (1 + config['orders'][DCANo]['profit'])
+        orderPrice = averagePrice * (1 + conf['orders'][DCANo]['profit'])
 
     XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
 
     log(f'Placing take profit {orderSide} order at {XorderPrice} size {totalSize}')
     orderTP = xchange.private.create_order(
         position_id=account['positionId'],
-        market=config['main']['market'],
+        market=conf['main']['market'],
         side=orderSide,
         order_type=ORDER_TYPE_LIMIT,
         post_only=True,
@@ -140,22 +136,22 @@ def nextOrder():
 
     DCANo+=1
 
-    orderSize = config['orders'][DCANo]['size']
+    orderSize = conf['orders'][DCANo]['size']
 
-    if config['main']['dca'] == 'buy':
+    if conf['main']['dca'] == 'buy':
         orderSide = ORDER_SIDE_BUY
-        orderPrice = startPrice * (1 - config['orders'][DCANo]['price'])
+        orderPrice = startPrice * (1 - conf['orders'][DCANo]['price'])
 
-    if config['main']['dca'] == 'sell':
+    if conf['main']['dca'] == 'sell':
         orderSide = ORDER_SIDE_SELL
-        orderPrice = startPrice * (1 + config['orders'][DCANo]['price'])
+        orderPrice = startPrice * (1 + conf['orders'][DCANo]['price'])
 
     XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
 
     log(f'Placing DCA {orderSide} order {DCANo + 1} at {XorderPrice} size {orderSize}')
     orderDCA = xchange.private.create_order(
         position_id=account['positionId'],
-        market=config['main']['market'],
+        market=conf['main']['market'],
         side=orderSide,
         order_type=ORDER_TYPE_LIMIT,
         post_only=True,
@@ -171,7 +167,6 @@ def nextOrder():
 
 
 def main():
-    global config
     global xchange
     global signature
     global signature_time
@@ -179,7 +174,6 @@ def main():
 
     global startPrice
     global DCANo
-    global config
     global totalSize
     global totalCash
     global orderDCA
@@ -190,7 +184,7 @@ def main():
     startTime = datetime.datetime.now()
 
     # Load configuration
-    config = json.loads(environ['strategy'])
+    conf = config()
 
     log(f'Start time {startTime.isoformat()} - strategy loaded.')
 
@@ -199,12 +193,12 @@ def main():
         network_id=NETWORK_ID_MAINNET,
         host=API_HOST_MAINNET,
         api_key_credentials={
-            'key': config['dydx']['APIkey'],
-            'secret': config['dydx']['APIsecret'],
-            'passphrase': config['dydx']['APIpassphrase'],
+            'key': conf['dydx']['APIkey'],
+            'secret': conf['dydx']['APIsecret'],
+            'passphrase': conf['dydx']['APIpassphrase'],
         },
-        stark_private_key=config['dydx']['stark_private_key'],
-        default_ethereum_address=config['dydx']['default_ethereum_address'],
+        stark_private_key=conf['dydx']['stark_private_key'],
+        default_ethereum_address=conf['dydx']['default_ethereum_address'],
     )
     log('Signing URL')
     signature_time = generate_now_iso()
@@ -217,10 +211,10 @@ def main():
 
     log('Getting account data')
     account = xchange.private.get_account().data['account']
-    market = xchange.public.get_markets(config['main']['market']).data['markets'][config['main']['market']]
+    market = xchange.public.get_markets(conf['main']['market']).data['markets'][conf['main']['market']]
     tickSize = float(market['tickSize'])
 
-    orderBook = xchange.public.get_orderbook(config['main']['market']).data
+    orderBook = xchange.public.get_orderbook(conf['main']['market']).data
     ask = float(orderBook['asks'][0]['price'])
     bid = float(orderBook['bids'][0]['price'])
    
@@ -232,22 +226,22 @@ def main():
     DCANo = 0
     orderTP = None
 
-    orderSize = config['orders'][DCANo]['size']
+    orderSize = conf['orders'][DCANo]['size']
 
-    if config['main']['dca'] == 'buy':
+    if conf['main']['dca'] == 'buy':
         orderSide = ORDER_SIDE_BUY
-        orderPrice = startPrice * (1 - config['orders'][DCANo]['price'])
+        orderPrice = startPrice * (1 - conf['orders'][DCANo]['price'])
 
-    if config['main']['dca'] == 'sell':
+    if conf['main']['dca'] == 'sell':
         orderSide = ORDER_SIDE_SELL
-        orderPrice = startPrice * (1 + config['orders'][DCANo]['price'])
+        orderPrice = startPrice * (1 + conf['orders'][DCANo]['price'])
 
     XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
 
     log(f'Placing DCA {orderSide} order {DCANo + 1} at {XorderPrice} size {orderSize}')
     orderDCA = xchange.private.create_order(
         position_id=account['positionId'],
-        market=config['main']['market'],
+        market=conf['main']['market'],
         side=orderSide,
         order_type=ORDER_TYPE_LIMIT,
         post_only=True,
