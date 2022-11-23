@@ -2,6 +2,8 @@
 
 [![Telegram](https://badges.aleen42.com/src/telegram.svg)](https://t.me/+9F0CZj8emLc2YTY0)
 
+![Bot in action](https://raw.githubusercontent.com/akili-bots/.github/main/images/dca.png?raw=true)
+
 Jambo! and welcome! akili-martingale is a grid bot that uses the martingale or what is known as DCA in 3Commas to trade crypto currencies. The word **akili** means brain or mind in Swahili. The objective here is to make it the most intelligent grid bot in existence that has as many advanced features as possible, but which at the same time can be used by your typical crypto trader with basic grid bot experience
 
 This, as with all projects was born out of frustration on the lack of features with "commercial" bots out there. They always missed that little tweak that in my mind would make things a lot more better, and hopefully profitable.
