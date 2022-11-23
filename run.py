@@ -19,10 +19,11 @@ signature = None
 signature_time = None
 account = None
 
+GOOD_TILL = 1672531200
+
 
 def log(msg):
     conf = config()
-
     msg = conf['main']['name'] + ':' + msg
     print(datetime.datetime.now().isoformat(), msg)
 
@@ -39,6 +40,27 @@ def log(msg):
         conf['telegram']['bottoken'] + '/sendMessage',
         params=payload_str
     )
+
+
+def createOrder(aSide, aSize, aPrice):
+    global xchange
+    global account
+    conf = config()
+
+    order = xchange.private.create_order(
+        position_id=account['positionId'],
+        market=conf['main']['market'],
+        side=aSide,
+        order_type=ORDER_TYPE_LIMIT,
+        post_only=True,
+        size=aSize,
+        price=aPrice,
+        limit_fee='0',
+        expiration_epoch_seconds=GOOD_TILL,
+    ).data['order']
+
+    log(f'Placed {aSide} order size {aSize} @ {aPrice} : {order["status"]}')
+    return order
 
 
 def ws_open(ws):
@@ -70,14 +92,12 @@ def ws_message(ws, message):
     global averagePrice
 
     conf = config()
-
     message = json.loads(message)
+
     if message['type'] != 'channel_data':
         return
-
     if len(message['contents']['orders']) == 0:
         return
-
     order = message['contents']['orders'][0]
     if order['status'] != 'FILLED':
         return
@@ -85,14 +105,21 @@ def ws_message(ws, message):
     if orderTP is not None:
         if order['id'] == orderTP['id']:
             log('Take profit order filled')
-            xchange.private.cancel_order(orderDCA['id'])
+            try:
+                xchange.private.cancel_order(orderDCA['id'])
+            except:
+                log(f'Error cancelling #{DCANo + 1}.Cancelled manually? Moving on...')
             ws.close()
+            return
 
     if order['id'] == orderDCA['id']:
         log('DCA order filled')
         if orderTP is not None:
-            xchange.private.cancel_order(orderTP['id'])
-        orderTP = None
+            try:
+                xchange.private.cancel_order(orderTP['id'])
+            except:
+                log('Error cancelling take profit order. Cancelled manually? Moving on...')
+            orderTP = None
 
         if conf['main']['takeprofit'] == 'buy':
             orderSide = ORDER_SIDE_BUY
@@ -102,25 +129,12 @@ def ws_message(ws, message):
             orderSide = ORDER_SIDE_SELL
             orderPrice = averagePrice * (1 + conf['orders'][DCANo]['profit'])
 
-        XaveragePrice = str(round(averagePrice, abs(Decimal(tickSize).as_tuple().exponent)))
-        log(f'Position size:{totalSize} @ {XaveragePrice}')
-        #XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
         XorderPrice = str(round(orderPrice, abs(Decimal(tickSize).as_tuple().exponent)))
 
-        log(f'Placing take profit {orderSide} order at {XorderPrice} size {totalSize}')
-        orderTP = xchange.private.create_order(
-            position_id=account['positionId'],
-            market=conf['main']['market'],
-            side=orderSide,
-            order_type=ORDER_TYPE_LIMIT,
-            post_only=True,
-            size=str(totalSize),
-            price=XorderPrice,
-            limit_fee='0',
-            expiration_epoch_seconds=9000000000,
-        ).data['order']
+        log('Placing take profit')
+        orderTP = createOrder(orderSide, str(totalSize), XorderPrice)
 
-        DCANo+=1
+        DCANo += 1
 
         orderSize = conf['orders'][DCANo]['size']
 
@@ -132,21 +146,10 @@ def ws_message(ws, message):
             orderSide = ORDER_SIDE_SELL
             orderPrice = startPrice * (1 + conf['orders'][DCANo]['price'])
 
-        #XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10],
-        XorderPrice = str(round(orderPrice, abs(Decimal(tickSize).as_tuple().exponent)))        
+        XorderPrice = str(round(orderPrice, abs(Decimal(tickSize).as_tuple().exponent)))
 
-        log(f'Placing DCA {orderSide} order {DCANo + 1} at {XorderPrice} size {orderSize}')
-        orderDCA = xchange.private.create_order(
-            position_id=account['positionId'],
-            market=conf['main']['market'],
-            side=orderSide,
-            order_type=ORDER_TYPE_LIMIT,
-            post_only=True,
-            size=str(orderSize),
-            price=XorderPrice,
-            limit_fee='0',
-            expiration_epoch_seconds=9000000000,
-        ).data['order']
+        log(f'Placing #{DCANo + 1}')
+        orderDCA = createOrder(orderSide, orderSize, XorderPrice)
 
         totalSize += orderSize
         totalCash += orderSize * orderPrice
@@ -155,19 +158,25 @@ def ws_message(ws, message):
         log(f'Position size:{totalSize} @ {XaveragePrice}')
 
 
-
 def ws_close(ws, p2, p3):
     log('Terminated by user, cancelling orders')
     if orderTP is not None:
         xchange.private.cancel_order(orderTP['id'])
     xchange.private.cancel_order(orderDCA['id'])
-            
-def on_ping(wsapp, message):
-    global account        
+
+
+def on_ping(ws, message):
+    global account
+    global orderDCA
     # To keep connection API active
     account = xchange.private.get_account().data['account']
-    # log("I'm alive!")
 
+    # Kill the bot if it waits too long for the first order
+    if orderTP is None and DCANo == 0:
+        xchange.private.cancel_order(orderDCA['id'])
+        log('Order #1 not filled. Exiting.')
+        ws.close()
+        return
 
 def main():
     global xchange
@@ -216,15 +225,9 @@ def main():
 
     log('Getting account data')
     account = xchange.private.get_account().data['account']
-    market = xchange.public.get_markets(conf['main']['market']).data['markets'][conf['main']['market']]
+    market = xchange.public.get_markets(
+        conf['main']['market']).data['markets'][conf['main']['market']]
     tickSize = market['tickSize']
-
-    orderBook = xchange.public.get_orderbook(conf['main']['market']).data
-    ask = float(orderBook['asks'][0]['price'])
-    bid = float(orderBook['bids'][0]['price'])
-   
-    startPrice = (ask + bid) / 2
-    log(f'Starting price is {startPrice}')
 
     orderDCA = None
     totalSize = 0
@@ -233,8 +236,12 @@ def main():
     orderTP = None
     averagePrice = 0
 
-    orderSize = conf['orders'][DCANo]['size']
-
+    # First order
+    log(f'Placing #1')
+    orderBook = xchange.public.get_orderbook(conf['main']['market']).data
+    ask = float(orderBook['asks'][0]['price'])
+    bid = float(orderBook['bids'][0]['price'])
+    startPrice = (ask + bid) / 2
     if conf['main']['dca'] == 'buy':
         orderSide = ORDER_SIDE_BUY
         orderPrice = startPrice * (1 - conf['orders'][DCANo]['price'])
@@ -243,23 +250,9 @@ def main():
         orderSide = ORDER_SIDE_SELL
         orderPrice = startPrice * (1 + conf['orders'][DCANo]['price'])
 
-    # XorderPrice = str(round(orderPrice / tickSize) * tickSize)[:10]
     XorderPrice = str(round(orderPrice, abs(Decimal(tickSize).as_tuple().exponent)))
-    print(tickSize)
-
-    # First order
-    log(f'Placing start {orderSide} order {DCANo + 1} at {XorderPrice} size {orderSize}')
-    orderDCA = xchange.private.create_order(
-        position_id=account['positionId'],
-        market=conf['main']['market'],
-        side=orderSide,
-        order_type=ORDER_TYPE_LIMIT,
-        post_only=True,
-        size=str(orderSize),
-        price=XorderPrice,
-        limit_fee='0',
-        expiration_epoch_seconds=9000000000,
-    ).data['order']
+    orderSize = conf['orders'][DCANo]['size']
+    orderDCA = createOrder(orderSide, str(orderSize), XorderPrice)
 
     totalSize += orderSize
     totalCash += orderSize * orderPrice
@@ -276,7 +269,6 @@ def main():
         on_close=ws_close,
         on_ping=on_ping
     )
-
     wsapp.run_forever(ping_interval=60, ping_timeout=20)
 
 
