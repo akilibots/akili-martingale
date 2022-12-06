@@ -1,0 +1,33 @@
+{
+  "main": {
+    "name": "💫",
+    "direction": "short",
+    "market": "ETH-USD"
+  },
+  
+  "dydx": {
+    "APIkey": "API key here. See https://twitter.com/ChrisJangita/status/1593531663597723648",
+    "APIsecret": "API secret here. See https://twitter.com/ChrisJangita/status/1593531663597723648",
+    "APIpassphrase": "API passphrase here. See https://twitter.com/ChrisJangita/status/1593531663597723648",
+    "stark_private_key": "As above. See https://twitter.com/ChrisJangita/status/1593531663597723648",
+    "default_ethereum_address": "See https://twitter.com/ChrisJangita/status/1593531663597723648"
+  },
+ 
+  "start": {
+    "price": 0
+  },
+
+  "stop": {
+    "price": 0
+  },
+
+  "orders": [
+    { "size": 0.01, "price": 0.001, "profit": 0.01 },
+    { "size": 0.03, "price": 0.01, "profit": 0.011 },
+    { "size": 0.07, "price": 0.02, "profit": 0.012 },
+    { "size": 0.15, "price": 0.03, "profit": 0.013 },
+    { "size": 0.40, "price": 0.04, "profit": 0.014 }
+  ],
+  
+  "telegram": { "chatid": "117223531", "bottoken": "5892084672:AAEI-l4eMfAZDhQvIsJ4es9ON25L_T7CgbE" }
+}
