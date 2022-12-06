@@ -106,15 +106,16 @@ def ws_message(ws, message):
     # Only let us know if TP or DCA order is filled
     foundFlag = False
     for order in message['contents']['orders']:
-        if order['status'] != 'FILLED':
-            continue
-
-        if orderTP is not None:
-            if order['id'] == orderTP['id']:
-                foundFlag = True
+        if order['status'] == 'FILLED':
+            if orderTP is not None:
+                if order['id'] == orderTP['id']:
+                    foundFlag = True
+                    break
 
             if order['id'] == orderDCA['id']:
                 foundFlag = True
+                break
+            
     if not foundFlag:
         return
 
