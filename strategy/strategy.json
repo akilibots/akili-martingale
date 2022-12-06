@@ -29,5 +29,5 @@
     { "size": 0.40, "price": 0.04, "profit": 0.014 }
   ],
   
-  "telegram": { "chatid": "117223531", "bottoken": "5892084672:AAEI-l4eMfAZDhQvIsJ4es9ON25L_T7CgbE" }
+  "telegram": { "chatid": "", "bottoken": "" }
 }
