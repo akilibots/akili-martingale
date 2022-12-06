@@ -20,6 +20,7 @@ signature_time = None
 account = None
 
 GOOD_TILL = 1672531200
+J = 10000000000
 
 
 def log(aMsg):
@@ -55,8 +56,8 @@ def createOrder(aSide, aSize, aPrice):
         side=aSide,
         order_type=ORDER_TYPE_LIMIT,
         post_only=True,
-        size=aSize,
-        price=aPrice,
+        size=str(aSize),
+        price=str(aPrice),
         limit_fee='0.1',
         expiration_epoch_seconds=GOOD_TILL,
     ).data['order']
@@ -148,10 +149,10 @@ def ws_message(ws, message):
         orderSide = ORDER_SIDE_SELL
         orderPrice = averagePrice * (1 + conf['orders'][DCANo]['profit'])
 
-    XorderPrice = str(round(orderPrice, abs(Decimal(tickSize).as_tuple().exponent)))
+    XorderPrice = round(orderPrice, abs(Decimal(tickSize).as_tuple().exponent))
 
     log('Place new take profit')
-    orderTP = createOrder(orderSide, str(totalSize), XorderPrice)
+    orderTP = createOrder(orderSide, totalSize, XorderPrice)
 
     # 2. Place new DCA order
     DCANo += 1
@@ -171,8 +172,8 @@ def ws_message(ws, message):
     log(f'Order #{DCANo}')
     orderDCA = createOrder(orderSide, orderSize, XorderPrice)
 
-    totalSize += orderSize
-    totalCash += orderSize * orderPrice
+    totalSize += int(orderSize * J) / J
+    totalCash += (int(orderSize * J) * orderPrice) / J
     averagePrice = totalCash / totalSize
     XaveragePrice = str(round(averagePrice, abs(Decimal(tickSize).as_tuple().exponent)))
     log(f'Position size:{totalSize} @ {XaveragePrice}')
@@ -298,14 +299,14 @@ def main():
     orderSize = conf['orders'][DCANo]['size']
     orderDCA = createOrder(orderSide, str(orderSize), XorderPrice)
 
-    totalSize += orderSize
-    totalCash += orderSize * orderPrice
+    totalSize += int(orderSize * J) / J
+    totalCash += (int(orderSize * J) * orderPrice) / J
     averagePrice = orderPrice
     XaveragePrice = str(round(averagePrice, abs(Decimal(tickSize).as_tuple().exponent)))
     log(f'Position size:{totalSize} @ {XaveragePrice}')
 
     log('Starting bot loop')
-    websocket.enableTrace(True)
+    # websocket.enableTrace(True)
     wsapp = websocket.WebSocketApp(
         WS_HOST_MAINNET,
         on_open=ws_open,
