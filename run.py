@@ -110,10 +110,10 @@ def ws_message(ws, message):
             continue
 
         if orderTP is not None:
-            if orderTP['id'] == order['id']:
+            if order['id'] == orderTP['id']:
                 foundFlag = True
 
-            if orderDCA['id'] == order['id']:
+            if order['id'] == orderDCA['id']:
                 foundFlag = True
     if not foundFlag:
         return
@@ -304,7 +304,7 @@ def main():
     log(f'Position size:{totalSize} @ {XaveragePrice}')
 
     log('Starting bot loop')
-    # websocket.enableTrace(True)
+    websocket.enableTrace(True)
     wsapp = websocket.WebSocketApp(
         WS_HOST_MAINNET,
         on_open=ws_open,
