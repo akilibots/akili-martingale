@@ -203,20 +203,16 @@ def on_ping(ws, message):
     conf = config()
     # To keep connection API active
     user = xchange.private.get_user().data['user']
-    print('in keep alive')
-    print(conf['start']['price'])
-    print(DCANo)
-    print(orderDCA)
-    print(orderTP)
 
-    # Kill the bot if it waits too long for the first order
-    if DCANo == 0 and conf['start']['price'] == 0:
-        orderDCA = xchange.private.get_order_by_id(orderDCA['id']).data['order']
-        if ['status'] != 'FILLED':
-            # TODO: The starting order can be partially filled. We need to compare remainingSize and size
-            xchange.private.cancel_order(orderDCA['id'])
-            log('Order #0 not filled. Exiting.')
-            ws.close()
+    # # Kill the bot if it waits too long for the first order
+    # if DCANo == 0 and conf['start']['price'] == 0:
+    #     if orderDCA is not None:
+    #         orderDCA = xchange.private.get_order_by_id(orderDCA['id']).data['order']
+    #         if ['status'] != 'FILLED':
+    #             # TODO: The starting order can be partially filled. We need to compare remainingSize and size
+    #             xchange.private.cancel_order(orderDCA['id'])
+    #             log('Order #0 not filled. Exiting.')
+    #             ws.close()
 
 def main():
     global xchange
