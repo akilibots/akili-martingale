@@ -107,7 +107,7 @@ def ws_message(ws, message):
     foundFlag = False
     for order in message['contents']['orders']:
         if order['status'] != 'FILLED':
-            continue
+            break
 
         if orderTP is not None:
             if order['id'] == orderTP['id']:
