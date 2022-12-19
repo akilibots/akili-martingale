@@ -327,7 +327,8 @@ def main():
 
         market = xchange.public.get_markets(
             conf['main']['market']).data['markets'][conf['main']['market']]
-        tick_size = market['tick_size']
+
+        tick_size = market['tickSize']
 
         order_dca = None
         order_tp = None
