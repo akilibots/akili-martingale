@@ -52,6 +52,7 @@ def save_state():
     # Save state of bot so that it can resume in case it dies for some reason (which it does often!)
     global order_dca
     global order_tp
+    global dca_no
 
     global start_price
     global average_price
@@ -65,7 +66,6 @@ def save_state():
         'start_price': start_price,
         'dca_no':dca_no,
     }
-    log('Save state.')
 
     with open("data/state.json", "w") as f:
         json.dump(save_data, f)
@@ -165,14 +165,16 @@ def ws_message(ws, message):
                     # Take profit was cancelled - re-instate
                     log(f'😡 Recreating cancelled TP {order_tp["side"]} order at {order_tp["price"]}')
                     order_tp = place_order(order_tp['side'], order_tp['size'], order_tp['price'])
+                    # Save replacement order info
+                    save_state()
 
             if order_dca['id'] == order['id']:
                 # Take profit was cancelled - re-instate
                 log(f'😡 Recreating cancelled DCA {order_dca["side"]} order at {order_dca["price"]}')
                 order_dca = place_order(order_dca['side'], order_dca['size'], order_dca['price'])
+                # Save replacement order info
+                save_state()
 
-            # Save any re-instated orders
-            save_state()
 
     # Only let us know if TP or DCA order is filled
     order_found = False
@@ -204,7 +206,7 @@ def ws_message(ws, message):
     # Must be DCA order that is filled
     log('DCA order filled')
     average_price = ((int(average_price * TO_INT) + int(float(order['price']) * TO_INT)) / 2) / TO_INT
-    total_size += config['orders'][dca_no]['size']
+    total_size += conf['orders'][dca_no]['size']
     log(f'Break even @ {average_price} size {total_size}')
     # 1. Remove old TP and put new one
     if order_tp is not None:
@@ -365,6 +367,7 @@ def main():
         average_price = order_price
         # XaveragePrice = str(round(average_price, abs(Decimal(tick_size).as_tuple().exponent)))
         # log(f'Position size:{total_size} @ {XaveragePrice}')
+        save_state()
 
     log('Starting bot loop')
     # websocket.enableTrace(True)
@@ -375,7 +378,7 @@ def main():
         on_close=ws_close,
         on_ping=on_ping
     )
-    wsapp.run_forever(ping_interval=60, ping_timeout=20)
+    wsapp.run_forever()
 
 
 if __name__ == "__main__":
