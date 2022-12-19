@@ -204,7 +204,8 @@ def ws_message(ws, message):
     # Must be DCA order that is filled
     log('DCA order filled')
     average_price = ((int(average_price * TO_INT) + int(float(order['price']) * TO_INT)) / 2) / TO_INT
-    total_size += config['orders'][dca_no]
+    total_size += config['orders'][dca_no]['size']
+    log(f'Break even @ {average_price} size {total_size}')
     # 1. Remove old TP and put new one
     if order_tp is not None:
         try:
