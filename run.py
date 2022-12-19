@@ -160,10 +160,11 @@ def ws_message(ws, message):
     for order in message['contents']['orders']:
         if order['status'] == 'CANCELED':
             # Reinstate ALL cancelled orders (CANCELED is mis-spelt smh Americans!!)
-            if order_tp['id'] == order['id']:
-                # Take profit was cancelled - re-instate
-                log(f'😡 Recreating cancelled TP {order_tp["side"]} order at {order_tp["price"]}')
-                order_tp = place_order(order_tp['side'], order_tp['size'], order_tp['price'])
+            if order_tp is not None:
+                if order_tp['id'] == order['id']:
+                    # Take profit was cancelled - re-instate
+                    log(f'😡 Recreating cancelled TP {order_tp["side"]} order at {order_tp["price"]}')
+                    order_tp = place_order(order_tp['side'], order_tp['size'], order_tp['price'])
 
             if order_dca['id'] == order['id']:
                 # Take profit was cancelled - re-instate
