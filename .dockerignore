@@ -1,5 +1,20 @@
-# Created by https://www.toptal.com/developers/gitignore/api/windows,osx,python,venv,visualstudiocode
-# Edit at https://www.toptal.com/developers/gitignore?templates=windows,osx,python,venv,visualstudiocode
+# Created by https://www.toptal.com/developers/gitignore/api/osx,windows,linux,python,virtualenv,venv,visualstudiocode
+# Edit at https://www.toptal.com/developers/gitignore?templates=osx,windows,linux,python,virtualenv,venv,visualstudiocode
+
+### Linux ###
+*~
+
+# temporary files which can be created if a process still has a handle open of a deleted file
+.fuse_hidden*
+
+# KDE directory preferences
+.directory
+
+# Linux trash folder which might appear on any partition or disk
+.Trash-*
+
+# .nfs files are created when an open file is removed but is still being accessed
+.nfs*
 
 ### OSX ###
 # General
@@ -204,6 +219,10 @@ cython_debug/
 pyvenv.cfg
 pip-selfcheck.json
 
+### VirtualEnv ###
+# Virtualenv
+# http://iamzed.com/2009/05/07/a-primer-on-virtualenv/
+
 ### VisualStudioCode ###
 .vscode/*
 !.vscode/settings.json
@@ -222,6 +241,12 @@ pip-selfcheck.json
 # Ignore all local history of files
 .history
 .ionide
+
+# Support for Project snippet scope
+.vscode/*.code-snippets
+
+# Ignore code-workspaces
+*.code-workspace
 
 ### Windows ###
 # Windows thumbnail cache files
@@ -249,6 +274,10 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/windows,osx,python,venv,visualstudiocode
-/dev
-/data/state.json
+# End of https://www.toptal.com/developers/gitignore/api/osx,windows,linux,python,virtualenv,venv,visualstudiocode
+
+# akilibots specific ignores
+dev/
+data/state.json
+.devcontainer/
+.vscode/
