@@ -23,18 +23,18 @@ GOOD_TILL = 1672531200
 J = 10000000000
 
 
-def log(aMsg):
-    def _log(msg):
+def log(msg):
+    def _log(_msg):
         conf = config()
-        msg = conf['main']['name'] + ':' + msg
-        print(datetime.datetime.now().isoformat(), msg)
+        _msg = conf['main']['name'] + ':' + _msg
+        print(datetime.datetime.now().isoformat(), _msg)
 
         if conf['telegram']['chatid'] == '' or conf['telegram']['bottoken'] == '':
             return
 
         params = {
             'chat_id': conf['telegram']['chatid'],
-            'text': msg
+            'text': _msg
         }
         payload_str = urllib.parse.urlencode(params, safe='@')
         requests.get(
@@ -42,7 +42,7 @@ def log(aMsg):
             conf['telegram']['bottoken'] + '/sendMessage',
             params=payload_str
         )
-    threading.Thread(target=_log, args=[aMsg]).start()
+    threading.Thread(target=_log, args=[msg]).start()
 
 
 def createOrder(aSide, aSize, aPrice):
