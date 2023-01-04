@@ -68,7 +68,7 @@ def save_state():
     }
 
     with open("data/state.json", "w") as f:
-        json.dump(save_data, f)
+        json.dump(save_data, f, default=str)
 
 def load_state():
     global order_dca
