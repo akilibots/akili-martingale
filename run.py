@@ -379,7 +379,7 @@ def main():
         on_close=ws_close,
         on_ping=on_ping
     )
-    wsapp.run_forever()
+    wsapp.run_forever(ping_interval=60, ping_timeout=20)
 
 
 if __name__ == "__main__":
