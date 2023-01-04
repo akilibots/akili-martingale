@@ -68,7 +68,7 @@ def save_state():
     }
 
     with open("data/state.json", "w") as f:
-        json.dump(save_data, f)
+        json.dump(save_data, f, default=str)
 
 def load_state():
     global order_dca
@@ -157,20 +157,21 @@ def ws_message(ws, message):
         # No orders to process
         return
 
+    # Check and recreate any manually cancelled orders
     for order in message['contents']['orders']:
         if order['status'] == 'CANCELED':
             # Reinstate ALL cancelled orders (CANCELED is mis-spelt smh Americans!!)
             if order_tp is not None:
-                if order_tp['id'] == order['id']:
-                    # Take profit was cancelled - re-instate
-                    log(f'😡 Recreating cancelled TP {order_tp["side"]} order at {order_tp["price"]}')
+                if order['id'] == order_tp['id']:
+                    # Take profit was cancelled - recreate
+                    log(f'Recreate cancelled TP 😡 {order_tp["side"]} order at {order_tp["price"]}')
                     order_tp = place_order(order_tp['side'], order_tp['size'], order_tp['price'])
                     # Save replacement order info
                     save_state()
 
-            if order_dca['id'] == order['id']:
+            if order['id'] == order_dca['id']:
                 # Take profit was cancelled - re-instate
-                log(f'😡 Recreating cancelled DCA {order_dca["side"]} order at {order_dca["price"]}')
+                log(f'Recreate cancelled DCA 😡 {order_dca["side"]} order at {order_dca["price"]}')
                 order_dca = place_order(order_dca['side'], order_dca['size'], order_dca['price'])
                 # Save replacement order info
                 save_state()
@@ -188,7 +189,7 @@ def ws_message(ws, message):
             if order['id'] == order_dca['id']:
                 order_found = True
                 break
-            
+           
     if not order_found:
         return
 
