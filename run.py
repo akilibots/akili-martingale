@@ -50,28 +50,28 @@ def log(msg):
 
 def save_state():
     # Save state of bot so that it can resume in case it dies for some reason (which it does often!)
-    global order_dca
+    global order_dd
     global order_tp
-    global dca_no
+    global dd_num
 
     global start_price
     global average_price
     global total_size
 
     save_data = {
-        'order_dca':order_dca,
+        'order_dd':order_dd,
         'order_tp':order_tp,
         'average_price':average_price,
         'total_size': total_size,
         'start_price': start_price,
-        'dca_no':dca_no,
+        'dd_num':dd_num,
     }
 
     with open("data/state.json", "w") as f:
         json.dump(save_data, f, default=str)
 
 def load_state():
-    global order_dca
+    global order_dd
     global order_tp
 
     global start_price
@@ -86,12 +86,12 @@ def load_state():
     with open("data/state.json", "r") as f:
         load_data = json.load(f)
 
-    order_dca = load_data['order_dca']
+    order_dd = load_data['order_dd']
     order_tp = load_data['order_tp']
     start_price = load_data['start_price']
     average_price = load_data['average_price']
     total_size = load_data['total_size']
-    order_dca = load_data['order_dca']
+    order_dd = load_data['order_dd']
 
     log('State loaded.')
     return True
@@ -133,11 +133,11 @@ def ws_open(ws):
 
 
 def ws_message(ws, message):
-    global order_dca
+    global order_dd
     global order_tp
 
     global start_price
-    global dca_no
+    global dd_num
 
     global total_size
 
@@ -169,15 +169,15 @@ def ws_message(ws, message):
                     # Save replacement order info
                     save_state()
 
-            if order['id'] == order_dca['id']:
+            if order['id'] == order_dd['id']:
                 # Take profit was cancelled - re-instate
-                log(f'Recreate cancelled DCA 😡 {order_dca["side"]} order at {order_dca["price"]}')
-                order_dca = place_order(order_dca['side'], order_dca['size'], order_dca['price'])
+                log(f'Recreate cancelled DD 😡 {order_dd["side"]} order at {order_dd["price"]}')
+                order_dd = place_order(order_dd['side'], order_dd['size'], order_dd['price'])
                 # Save replacement order info
                 save_state()
 
 
-    # Only let us know if TP or DCA order is filled
+    # Only let us know if TP or DD order is filled
     order_found = False
     for order in message['contents']['orders']:
         if order['status'] == 'FILLED':
@@ -186,7 +186,7 @@ def ws_message(ws, message):
                     order_found = True
                     break
 
-            if order['id'] == order_dca['id']:
+            if order['id'] == order_dd['id']:
                 order_found = True
                 break
            
@@ -198,16 +198,16 @@ def ws_message(ws, message):
         if order['id'] == order_tp['id']:
             log('Take profit order filled! 💰')
             try:
-                xchange.private.cancel_order(order_dca['id'])
+                xchange.private.cancel_order(order_dd['id'])
             except:
-                log(f'Order #{dca_no} cancel error. cancelled manually?')
+                log(f'Order #{dd_num} cancel error. cancelled manually?')
             ws.close()
             return
 
-    # Must be DCA order that is filled
-    log('DCA order filled')
+    # Must be DD order that is filled
+    log('DD order filled')
     average_price = ((int(average_price * TO_INT) + int(float(order['price']) * TO_INT)) / 2) / TO_INT
-    total_size += conf['orders'][dca_no]['size']
+    total_size += conf['orders'][dd_num]['size']
     log(f'Break even @ {average_price} size {total_size}')
     # 1. Remove old TP and put new one
     if order_tp is not None:
@@ -218,38 +218,38 @@ def ws_message(ws, message):
 
     if conf['main']['direction'] == 'short':
         order_side = ORDER_SIDE_BUY
-        order_price = average_price * (1 - conf['orders'][dca_no]['profit'])
+        order_price = average_price * (1 - conf['orders'][dd_num]['profit'])
 
     if conf['main']['direction'] == 'long':
         order_side = ORDER_SIDE_SELL
-        order_price = average_price * (1 + conf['orders'][dca_no]['profit'])
+        order_price = average_price * (1 + conf['orders'][dd_num]['profit'])
 
     tick_order_price = round(order_price, abs(Decimal(tick_size).as_tuple().exponent))
 
     log('Place new take profit')
     order_tp = place_order(order_side, total_size, tick_order_price)
 
-    # 2. Place new DCA order
-    dca_no += 1
-    if dca_no < len(conf['orders']):
+    # 2. Place new DD order
+    dd_num += 1
+    if dd_num < len(conf['orders']):
 
-        order_size = conf['orders'][dca_no]['size']
+        order_size = conf['orders'][dd_num]['size']
 
         if conf['main']['direction'] == 'long':
             order_side = ORDER_SIDE_BUY
-            order_price = start_price * (1 - conf['orders'][dca_no]['price'])
+            order_price = start_price * (1 - conf['orders'][dd_num]['price'])
 
         if conf['main']['direction'] == 'short':
             order_side = ORDER_SIDE_SELL
-            order_price = start_price * (1 + conf['orders'][dca_no]['price'])
+            order_price = start_price * (1 + conf['orders'][dd_num]['price'])
 
         tick_order_price = str(round(order_price, abs(Decimal(tick_size).as_tuple().exponent)))
 
-        log(f'Order #{dca_no}')
-        if dca_no == len(conf['orders']) - 1:
-            log('Final DCA order 😮')
+        log(f'Order #{dd_num}')
+        if dd_num == len(conf['orders']) - 1:
+            log('Final DD order 😮')
 
-        order_dca = place_order(order_side, order_size, tick_order_price)
+        order_dd = place_order(order_side, order_size, tick_order_price)
 
     save_state()
 
@@ -262,21 +262,21 @@ def ws_close(ws, p2, p3):
 
 def on_ping(ws, message):
     global account
-    global order_dca
+    global order_dd
     global user
-    global dca_no
+    global dd_num
 
     conf = config()
     # To keep connection API active
     user = xchange.private.get_user().data['user']
 
     # # Kill the bot if it waits too long for the first order
-    # if dca_no == 0 and conf['start']['price'] == 0:
-    #     if order_dca is not None:
-    #         order_dca = xchange.private.get_order_by_id(order_dca['id']).data['order']
+    # if dd_num == 0 and conf['start']['price'] == 0:
+    #     if order_dd is not None:
+    #         order_dd = xchange.private.get_order_by_id(order_dd['id']).data['order']
     #         if ['status'] != 'FILLED':
     #             # TODO: The starting order can be partially filled. We need to compare remainingSize and size
-    #             xchange.private.cancel_order(order_dca['id'])
+    #             xchange.private.cancel_order(order_dd['id'])
     #             log('Order #0 not filled. Exiting.')
     #             ws.close()
 
@@ -288,8 +288,8 @@ def main():
     global user
 
     global start_price
-    global dca_no
-    global order_dca
+    global dd_num
+    global order_dd
 
     global total_size
 
@@ -335,16 +335,16 @@ def main():
 
         tick_size = market['tickSize']
 
-        order_dca = None
+        order_dd = None
         order_tp = None
 
         total_size = 0
         average_price = 0
 
-        dca_no = 0
+        dd_num = 0
 
         # First order
-        log(f'Order #{dca_no}')
+        log(f'Order #{dd_num}')
         order_book = xchange.public.get_orderbook(conf['main']['market']).data
         start_price = conf['start']['price'] 
 
@@ -355,15 +355,15 @@ def main():
 
         if conf['main']['direction'] == 'long':
             order_side = ORDER_SIDE_BUY
-            order_price = start_price * (1 - conf['orders'][dca_no]['price'])
+            order_price = start_price * (1 - conf['orders'][dd_num]['price'])
 
         if conf['main']['direction'] == 'short':
             order_side = ORDER_SIDE_SELL
-            order_price = start_price * (1 + conf['orders'][dca_no]['price'])
+            order_price = start_price * (1 + conf['orders'][dd_num]['price'])
 
         tick_order_price = str(round(order_price, abs(Decimal(tick_size).as_tuple().exponent)))
-        order_size = conf['orders'][dca_no]['size']
-        order_dca = place_order(order_side, str(order_size), tick_order_price)
+        order_size = conf['orders'][dd_num]['size']
+        order_dd = place_order(order_side, str(order_size), tick_order_price)
 
         average_price = order_price
         # XaveragePrice = str(round(average_price, abs(Decimal(tick_size).as_tuple().exponent)))
