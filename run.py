@@ -226,7 +226,7 @@ def ws_message(ws, message):
 
     tick_order_price = round(order_price, abs(Decimal(tick_size).as_tuple().exponent))
 
-    log('Place new take profit')
+    log('New take profit')
     order_tp = place_order(order_side, total_size, tick_order_price)
 
     # 2. Place new DD order
