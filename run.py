@@ -196,56 +196,51 @@ def ws_message(ws, message):
     # TP Check, if take profit is filled hurray! 🦘
     if order_tp is not None:
         if order['id'] == order_tp['id']:
-            log('Take profit order filled! 💰')
             try:
                 xchange.private.cancel_order(order_dd['id'])
             except:
                 log(f'Order #{dd_num} cancel error. cancelled manually?')
+            xchange_fee = Decimal(user['makerFeeRate']) * (Decimal(str(dd_num)) + Decimal('2'))
+            profit = abs(Decimal(str(average_price)) - Decimal(order['id']['price'])) * Decimal(str(total_size))
+            net_profit = profit - xchange_fee
+            log(f'Take profit order filled! 💰 USDC {net_profit}')
+
             ws.close()
             return
 
     # Must be DD order that is filled
-    log('DD order filled')
+    log(f'DD #{dd_num} filled')
+ 
     average_price = ((int(average_price * TO_INT) + int(float(order['price']) * TO_INT)) / 2) / TO_INT
     total_size += conf['orders'][dd_num]['size']
     log(f'Break even @ {average_price} size {total_size}')
+
     # 1. Remove old TP and put new one
     if order_tp is not None:
         try:
             xchange.private.cancel_order(order_tp['id'])
         except:
             log('TP cancel fail, cancelled manually?')
-
     if conf['main']['direction'] == 'short':
         order_side = ORDER_SIDE_BUY
         order_price = average_price * (1 - conf['orders'][dd_num]['profit'])
-
     if conf['main']['direction'] == 'long':
         order_side = ORDER_SIDE_SELL
         order_price = average_price * (1 + conf['orders'][dd_num]['profit'])
-
     tick_order_price = round(order_price, abs(Decimal(tick_size).as_tuple().exponent))
-
-    log('New take profit')
     order_tp = place_order(order_side, total_size, tick_order_price)
 
     # 2. Place new DD order
     dd_num += 1
     if dd_num < len(conf['orders']):
-
         order_size = conf['orders'][dd_num]['size']
-
         if conf['main']['direction'] == 'long':
             order_side = ORDER_SIDE_BUY
             order_price = start_price * (1 - conf['orders'][dd_num]['price'])
-
         if conf['main']['direction'] == 'short':
             order_side = ORDER_SIDE_SELL
             order_price = start_price * (1 + conf['orders'][dd_num]['price'])
-
         tick_order_price = str(round(order_price, abs(Decimal(tick_size).as_tuple().exponent)))
-
-        log(f'Order #{dd_num}')
         if dd_num == len(conf['orders']) - 1:
             log('Final DD order 😮')
 
@@ -255,7 +250,6 @@ def ws_message(ws, message):
 
 
 def ws_close(ws, p2, p3):
-
     log('Asked to stop some reason')
     save_state()
 
@@ -266,19 +260,29 @@ def on_ping(ws, message):
     global user
     global dd_num
 
-    conf = config()
     # To keep connection API active
     user = xchange.private.get_user().data['user']
 
-    # # Kill the bot if it waits too long for the first order
-    # if dd_num == 0 and conf['start']['price'] == 0:
-    #     if order_dd is not None:
-    #         order_dd = xchange.private.get_order_by_id(order_dd['id']).data['order']
-    #         if ['status'] != 'FILLED':
-    #             # TODO: The starting order can be partially filled. We need to compare remainingSize and size
-    #             xchange.private.cancel_order(order_dd['id'])
-    #             log('Order #0 not filled. Exiting.')
-    #             ws.close()
+    # Kill the bot if it waits too long for the first order and past follow threshold
+    conf = config()
+    if dd_num == 0 and conf['start']['price'] == 0:
+        if order_dd is not None:
+            order_dd = xchange.private.get_order_by_id(order_dd['id']).data['order']
+            if order_dd['status'] == 'PENDING':
+                # Get current market price
+                order_book = xchange.public.get_orderbook(conf['main']['market']).data
+                ask = Decimal(order_book['asks'][0]['price'])
+                bid = Decimal(order_book['bids'][0]['price'])
+                market_price = (ask + bid) / 2
+
+                move_ratio = abs(market_price - Decimal(order_dd['price']))/ Decimal(order_dd['price'])
+
+                if move_ratio > Decimal(conf['start']['follow']):
+                    # Price has moved past allowed follow threshold
+                    # TODO: The starting order can be partially filled. We need to compare remainingSize and size
+                   xchange.private.cancel_order(order_dd['id'])
+                   log(f'Price {market_price} moved past follow threshold {move_ratio} for Order #0 @ {Decimal(order_dd["price"])}. Exiting.')
+                   ws.close()
 
 def main():
     global xchange
@@ -344,7 +348,7 @@ def main():
         dd_num = 0
 
         # First order
-        log(f'Order #{dd_num}')
+        log(f'DD #{dd_num} (start order)')
         order_book = xchange.public.get_orderbook(conf['main']['market']).data
         start_price = conf['start']['price'] 
 
