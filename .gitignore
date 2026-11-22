@@ -252,3 +252,9 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/windows,osx,python,venv,visualstudiocode
 /dev
 /data/state.json
+/data/*.tmp
+/data/*.lock
+/data/exchange.json
+/data/state.json
+/data/tokens.json
+.env
